@@ -1,4 +1,10 @@
-Import and load the dataset:
+## **EXPLANATORY DATA ANALYSIS (EDA) PROJECT: UFA THROWING STATISTICS**
+
+## *Carnegie Mellon Sports Analytics Camp (CMSACamp) 2026*
+
+### *An Le's Data Exploration*
+
+#### 0. Importing the dataset
 
 ```{r}
 rm(list = ls())
@@ -8,6 +14,8 @@ library(tidyverse)
 ufa_throws <- read_csv("https://raw.githubusercontent.com/36-SURE/2026/main/data/ufa_throws.csv")
 head(ufa_throws)
 ```
+
+#### 1. Exploring goal and turnover data
 
 Relationship of each variable to whether a throw results in a goal:
 
@@ -95,9 +103,7 @@ goal_throws |>
 # Around 70% of goals are created with <= 10 throws, and >50% of goals are created with <= 8 throws
 ```
 
-
-Drawing arrows in ggplot2: `geom_segment`:
-https://r-graph-gallery.com/415-arrows-in-ggplot-graph.html
+Drawing arrows in ggplot2: `geom_segment`: https://r-graph-gallery.com/415-arrows-in-ggplot-graph.html
 
 ```{r}
 goal_throws |>
@@ -117,8 +123,8 @@ Probability from scoring a goal and making a turnover from a certain coordinate 
 ufa_goal_turnover <- ufa_throws |>
   select(thrower_y, goal, turnover) |>
   mutate(zone = case_when(0 <= thrower_y & thrower_y <= 20 ~ "own_end_zone",
-                          thrower_y > 20 & thrower_y <= 55 ~ "before_midpoint",
-                          thrower_y > 55 ~ "after_midpoint"))
+                          thrower_y > 20 & thrower_y <= 60 ~ "before_midpoint",
+                          thrower_y > 60 ~ "after_midpoint"))
 
 goal_from_zones <- ufa_goal_turnover |>
   select(zone, goal) |>
@@ -135,3 +141,159 @@ turnover_from_zones <- ufa_goal_turnover |>
 goal_from_zones
 turnover_from_zones
 ```
+
+Most of the failed passes (leading to the turnover) come before the midpoint, while the vast majority of the goal comes after the midpoint!
+
+=> How can teams break through the midpoint to score goals?
+
+Note that field dimensions in ultimate frisbee may differ by tournaments and styles of play. In UFA, the field is 53+(1/3) yards wide and 80 yards long plus 20 yard endzones.
+
+The UFA rulebook:
+https://watchufa.com/sites/default/files/UFA%20Rule%20Book%202024%20v12.0.pdf
+
+#### 2. Exploring team results data
+
+Which team appears the most in the dataset? (Removing entries for duplicated matches)
+
+```{r}
+# https://tidyr.tidyverse.org/reference/separate.html
+# https://tidyr.tidyverse.org/reference/separate_wider_delim.html
+
+# https://www.geeksforgeeks.org/r-language/concatenate-two-strings-in-r-programming-paste-method/
+
+match_data <- ufa_throws |>
+  select(gameID, home_teamID, away_teamID, home_team_win) |>
+  distinct(gameID, .keep_all = TRUE) |>
+  tidyr::separate_wider_delim(gameID, delim = "-",
+                              names = c("game_year", "game_month", "game_date",
+                                        NA, NA)) |>
+  mutate(winner = case_when(home_team_win == 0 ~ away_teamID,
+                            home_team_win == 1 ~ home_teamID),
+         loser = case_when(winner == home_teamID ~ away_teamID,
+                           winner == away_teamID ~ home_teamID),
+         game_full_date = paste(game_year, game_month, game_date, sep = "-")) |>
+  mutate(game_full_date = as.Date(game_full_date, "%Y-%m-%d")) |>
+  select(game_full_date, home_teamID, away_teamID, winner, loser) |>
+  arrange(game_full_date)
+
+match_data
+```
+
+```{r}
+summary(match_data$game_full_date)
+```
+
+June 4, 2021 is the first day of regular season of the 2021 season.
+August 24, 2024 is the championship game of the 2024 season.
+
+https://www.watchufa.com/league/news/2021-audl-game-preview-week-1-minnesota-wind-chill-madison-radicals
+
+https://www.watchufa.com/league/news/2024-ufa-playoffs-schedule
+
+```{r}
+home_appearances <- match_data |>
+  count(home_teamID)
+
+away_appearances <- match_data |>
+  count(away_teamID)
+
+# There is also an "allstar" game, which is useful to remove in this case
+total_appearances <- home_appearances |>
+  full_join(away_appearances, join_by(home_teamID == away_teamID),
+            suffix = c("_home", "_away")) |>
+  mutate(total_matches = n_home + n_away) |>
+  rename(teamID = home_teamID) |>
+  filter(!(teamID %in% c("allstars1", "allstars2")))
+
+total_appearances
+```
+
+```{r}
+# Pivoting and plotting as a facet
+total_appearances_pivot <- total_appearances |>
+  pivot_longer(n_home:total_matches,
+               names_to = "match_type", values_to = "count") |>
+  filter(match_type != "total_matches")
+
+total_appearances_pivot
+
+total_appearances_pivot |>
+  ggplot(aes(x = teamID, y = count, fill = match_type)) +
+  geom_col(position = "dodge") +
+  # Change position of legend to bottom, rotate x-axis labels by 45 degrees
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45,
+                                   vjust = 1, hjust = 1))
+  #facet_grid(match_type ~ .)
+```
+
+What about the number of wins or losses?
+
+```{r}
+win_counts <- match_data |>
+  count(winner)
+
+loss_counts <- match_data |>
+  count(loser)
+
+# There is also an "allstar" game, which is useful to remove in this case
+overall_stats <- win_counts |>
+  left_join(loss_counts, join_by(winner == loser),
+            suffix = c("_wins", "_losses")) |>
+  mutate(total_matches = n_wins + n_losses) |>
+  rename(teamID = winner) |>
+  filter(!(teamID %in% c("allstars1", "allstars2")))
+
+overall_stats
+```
+
+```{r}
+# Same as the previous use case
+overall_stats_pivot <- overall_stats |>
+  pivot_longer(n_wins:total_matches,
+               names_to = "outcome", values_to = "count") |>
+  filter(outcome != "total_matches")
+
+overall_stats_pivot
+
+overall_stats_pivot |>
+  ggplot(aes(x = teamID, y = count, fill = outcome)) +
+  geom_col(position = "dodge") +
+  # Change position of legend to bottom, rotate x-axis labels by 45 degrees
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45,
+                                   vjust = 1, hjust = 1))
+  #facet_grid(match_type ~ .)
+```
+
+```{r}
+# How about the win percentage?
+overall_stats_win_pct <- overall_stats |>
+  mutate(win_percentage = n_wins / total_matches,
+# Use example from Lecture 3, mutate to display it properly in the following plot
+         teamID = fct_reorder(teamID, win_percentage, .desc = TRUE)) |>
+  arrange(desc(win_percentage))
+
+overall_stats_win_pct
+
+overall_stats_win_pct |>
+  ggplot(aes(x = teamID, y = win_percentage)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+Does a team perform better in certain times of the year or certain periods of the season? [TO BE UPDATED]
+
+#### 3. Proposed questions
+
+1.  Which direction of attack (i.e. to the right or left side of the field) has more chances of scoring a goal? Does this vary across teams?
+
+2.  What makes a team attempt further throws, or attempt to score goals with fewer passes? Is it the time pressure (little time left in quarter or the match), or the score pressure (being led by so many points)?
+
+3.  For all team's possession period that builds up from before the midpoint and passing through the midpoint, how likely is a team to score goals afterwards?
+
+4.  [TO BE UPDATED] Can explore questions on how a particular team's throwing strategies evolved over time, or how a particular tournament-wide statistic has changed over time.
+
+5.  Clustering analysis: Cluster teams by the attacking strategy (starting vertical half, ending vertical half, number of times that the team switch vertical halves).
+
+6.  Can also repeat these questions but for a particular team (eg: Pittsburgh Thunderbirds) to analyze in depth and suggest strategies.
