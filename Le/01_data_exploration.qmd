@@ -1,9 +1,6 @@
 ---
-title: "01_data_exploration"
-format: html
-editor: source
+format: gfm
 ---
-
 ## **EXPLANATORY DATA ANALYSIS (EDA) PROJECT: UFA THROWING STATISTICS**
 
 ## *Carnegie Mellon Sports Analytics Camp (CMSACamp) 2026*

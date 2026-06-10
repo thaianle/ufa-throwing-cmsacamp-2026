@@ -1,9 +1,6 @@
 ---
-title: "02_throw_position_data"
-format: html
-editor: source
+format: gfm
 ---
-
 #### 0. Importing the dataset
 
 ```{r}
@@ -156,10 +153,227 @@ prop_throws_by_team |>
   geom_col()
 ```
 
+Number of cross-wing shots (last passes):
+
+```{r}
+successful_attacking_phases |>
+  filter(goal == 1) |>
+  count(throw_path_type)
+```
+
+Number of goals that a team has made after picking up from at least a turnover:
+
+```{r}
+successful_attacking_phases |>
+  filter(possession_num > 1 & goal == 1) |>
+  count(possession_num)
+  #ggplot(aes(x = possession_num, y = n)) +
+  #geom_col()
+```
+
+There are actually a lot of them! (`4416 / 21391 = approx. 20.6%`)
+
+#### 3. Which place up the field (y-coordinate) are teams most likely to change their wing of attack?
+
+```{r}
+# Here we consider successful passes (no turnovers)
+
+successful_throw_types <- successful_throws |>
+  mutate(throw_path_type = case_when(
+    (thrower_x >= 0) & (receiver_x >= 0) ~ "right_wing",
+    (thrower_x <= 0) & (receiver_x <= 0) ~ "left_wing",
+    TRUE ~ "cross_throw"
+    ))
+
+successful_throw_types
+
+successful_throw_types |>
+  filter(throw_path_type == "cross_throw") |>
+  ggplot(aes(y = thrower_y)) +
+  geom_histogram()
+```
+
+```{r}
+# What if we plot them as positional heat map data?
+# Much of the settings are taken from my `01_data_exploration.qmd` file
+
+successful_throw_types |>
+  # We also need the pass to have a considerable distance into each wing
+  # to be considered a cross
+  filter(throw_path_type == "cross_throw" &
+           (abs(thrower_x) >= 5 | abs(receiver_x) >= 5)) |>
+  ggplot() +
+  geom_density_2d_filled(aes(x = thrower_x, y = thrower_y)) +
+  scale_x_continuous(limits = c(-(26+2/3), 26+2/3)) +
+  scale_y_continuous(limits = c(0, 120)) +
+  coord_fixed() + scale_fill_viridis_d() +
+  geom_hline(yintercept = 20, color = "white") +
+  geom_hline(yintercept = 100, color = "white") +
+  theme(legend.position = "none")
+```
+
+Much of the activity is happening before the midpoint (60-yard line), or more precisely, around 25 to 50 yards up the field.
+
+What if we facet this plot by another variable, such as whether the attacking phase is successful or not?
+
+I will denote this using a binary variable called `attack_outcome`, which takes 1 if attacking phase eventually results in a goal, and 0 if resulting in a turnover.
+
+```{r}
+# Create another dataset of unsuccessful attacking phases
+# Similar to the successful attacking phases data outlined earlier in this notebook
+turnover_indicators <- ufa_throws |>
+  filter(turnover == 1) |>
+  select(gameID, game_quarter, is_home_team, possession_num,
+         home_team_score, away_team_score)
+
+turnover_indicators
+
+unsuccessful_attacking_phases <- turnover_indicators |>
+  left_join(ufa_throws,
+            join_by(gameID, game_quarter, is_home_team, possession_num,
+                    home_team_score, away_team_score)) |>
+  mutate(attack_outcome = 0,
+         throw_path_type = case_when(
+           (thrower_x >= 0) & (receiver_x >= 0) ~ "right_wing",
+           (thrower_x <= 0) & (receiver_x <= 0) ~ "left_wing",
+           TRUE ~ "cross_throw"
+           ))
+
+unsuccessful_attacking_phases
+```
+
+```{r}
+successful_attacking_phases <- successful_attacking_phases |>
+  mutate(attack_outcome = 1)
+
+ufa_throws_updated <- bind_rows(successful_attacking_phases,
+                                unsuccessful_attacking_phases)
+
+ufa_throws_updated
+```
+
+```{r}
+# Caveat: Not every attacking phase ends with a goal or with a turnover.
+# We will look at this later
+ufa_throws |>
+  anti_join(ufa_throws_updated)
+```
+
+```{r}
+ufa_throws_updated |>
+  filter(throw_path_type == "cross_throw" &
+           (abs(thrower_x) >= 5 | abs(receiver_x) >= 5)) |>
+  ggplot() +
+  geom_density_2d_filled(aes(x = thrower_x, y = thrower_y)) +
+  facet_wrap(~ attack_outcome) +
+  scale_x_continuous(limits = c(-(26+2/3), 26+2/3)) +
+  scale_y_continuous(limits = c(0, 120)) +
+  coord_fixed() + scale_fill_viridis_d() +
+  geom_hline(yintercept = 20, color = "white") +
+  geom_hline(yintercept = 100, color = "white") +
+  theme(legend.position = "none")
+```
+
+Visualizing position of cross-throwing shots (that actually results in a goal):
+
+```{r}
+successful_attacking_phases |>
+  # Here, we change the | into &
+  # We want both the thrower and receiver to be at least 5 yards away from the
+  # vertical center of the field to be considered as a cross shot on goal
+  filter(goal == 1 & throw_path_type == "cross_throw" &
+         abs(thrower_x) >= 5 & abs(receiver_x) >= 5) |>
+  ggplot() +
+  geom_density_2d_filled(aes(x = thrower_x, y = thrower_y)) +
+  scale_x_continuous(limits = c(-(26+2/3), 26+2/3)) +
+  # For shots, we only consider those made after the midpoint
+  # because shot data in other areas are so scarce
+  scale_y_continuous(limits = c(60, 110)) +
+  coord_fixed() + scale_fill_viridis_d() +
+  geom_hline(yintercept = 100, color = "white") +
+  theme(legend.position = "none")
+```
+
+Most cross shots are made within the 80-85 yards mark.
+
+How about adding another hexagon density plot version from Lecture 5?
+
+```{r}
+# install.packages("hexbin")
+library(hexbin)
+
+successful_attacking_phases |>
+  filter(goal == 1 & throw_path_type == "cross_throw" &
+         abs(thrower_x) >= 5 & abs(receiver_x) >= 5) |>
+  ggplot(aes(x = thrower_x, y = thrower_y)) +
+  geom_hex(binwidth = c(5, 5)) +
+  scale_x_continuous(limits = c(-(26+2/3), 26+2/3)) +
+  scale_y_continuous(limits = c(60, 110)) +
+  coord_fixed() +
+  geom_hline(yintercept = 100, color = "white") +
+  scale_fill_gradient(low = "midnightblue", high = "goldenrod") +
+  theme(legend.position = "none")
+```
+
+#### 3. Trends in left-wing, right-wing, and cross-wing by season
+
+Here, we are taking statistics for all teams (also including all-star teams).
+
+```{r}
+ufa_throws_seasons <- ufa_throws |>
+  mutate(season = as.numeric(substr(gameID, 1, 4)),
+         throw_path_type = case_when(
+           (thrower_x >= 0) & (receiver_x >= 0) ~ "right_wing",
+           (thrower_x <= 0) & (receiver_x <= 0) ~ "left_wing",
+           TRUE ~ "cross_throw"
+           ))
+  
+ufa_throw_path_by_season <- ufa_throws_seasons |>
+  select(season, throw_path_type) |>
+  # Count the number of each throw path types by season
+  group_by(season) |>
+  count(throw_path_type) |>
+  ungroup()
+
+ufa_throw_path_by_season
+
+ufa_throws_games_by_season <- ufa_throws_seasons |>
+  select(season, gameID) |>
+  unique() |>
+  # Count the number of game IDs by season
+  count(season)
+
+ufa_throws_games_by_season
+```
+
+```{r}
+ufa_throw_path_by_season_2 <- ufa_throw_path_by_season |>
+  left_join(ufa_throws_games_by_season, join_by(season),
+            suffix = c("_throws", "_match_in_season")) |>
+  mutate(avg_throws_per_match = n_throws / n_match_in_season)
+
+ufa_throw_path_by_season_2
+
+ufa_throw_path_by_season_2 |>
+  ggplot(aes(x = season, y = avg_throws_per_match, color = throw_path_type)) +
+  geom_point() + geom_line() +
+  scale_fill_viridis_d() + theme(legend.position = "bottom")
+```
+
 #### Other questions (will explore later):
 
-- Which place up the field (y-coordinate) are teams most likely to change their wing of attack?
-- How many shots on goal (not passes) are performed inside a wing or cross-wings?
-- Number of goals that a team has made after picking up from at least a turnover?
+- Interaction between the number of turnovers it takes a team to score goals and the goal differences / final scores of the match
+
+Metric: Arranging teams by the number of turnovers or possession number before scoring a goal. Higher possession number = wasting many scoring chances.
+
 - Explore the starting position (where to build up) and ending position (where there is a shot on goal) of a successful/unsuccessful attacking phase
+
+I have partially explored that in the notebook, but there might be more variables to consider.
+
 - Explore the possession time of a successful attacking phase, although this is outside of the throw position data focus of this notebook
+
+- Trends in right/left/cross wing tendencies over time of the teams by season
+
+- Tendency to attack right wing or left wing by team, such as proportion of primarily right/left wing attacking phases divided by the total number of attacking phases (can be included in the clustering analysis)
+
+Caveat in ultimate frisbee data: Different from soccer where players need to move the ball to the midfield some time for a good shot on goal. In frisbee, players can build up their attack and score from anywhere.
