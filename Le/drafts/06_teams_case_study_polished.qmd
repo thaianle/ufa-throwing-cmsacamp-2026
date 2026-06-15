@@ -166,9 +166,7 @@ upper_half_frisbee_field <- list(
 
 #### 2. The full frisbee field ####
 
-full_frisbee_field <- unlist(list(
-  
-  upper_half_frisbee_field,
+lower_half_frisbee_field <- list(
   
   # Overwrite the existing scale of the upper half of the field
   scale_y_continuous(limits = c(0, 120), expand = c(0, 0),
@@ -207,7 +205,7 @@ full_frisbee_field <- unlist(list(
   geom_circle(aes(x0 = 0, y0 = 40, r = 0.5), fill = "white", color = "white"),
   geom_circle(aes(x0 = 0, y0 = 10, r = 0.5), fill = "white", color = "white")
   
-))
+)
 
 # Note that we are using the existing upper_half_frisbee_field list, which initially
 # creates a list of lists.
@@ -260,7 +258,54 @@ ufa_throws_updated |>
         plot.title = element_text(hjust = 0.5, face = "bold"),
         plot.subtitle = element_text(hjust = 0.5, face = "italic"),
         legend.position = "none")
+
+# Save the resulting plot to display in the slides
+ggsave("case_study_points_scored.png")
 ```
+
+Locations of all successful throws (without a turnover, regardless of attacking phase) by team:
+
+```{r}
+successful_throws <- ufa_throws_updated |>
+  
+  filter(turnover == 0 & team_in_possession %in% c("empire", "cannons")) |>
+  mutate(team_in_possession = ifelse(
+    team_in_possession == "empire",
+    "New York Empire (2021-24)", "Tampa Bay Cannons (2021-22)"
+    ))
+
+successful_throws
+```
+
+
+```{r}
+# DO NOT RUN UNTIL I HAVE MADE ENOUGH CHANGES #
+
+successful_throws |>
+  
+  ggplot() +
+  geom_density_2d_filled(aes(x = thrower_x, y = thrower_y), alpha = 0.8) +
+  facet_wrap(~ team_in_possession, nrow = 1, axes = "all_y") +
+  scale_fill_brewer(palette = "RdYlGn", direction = -1) +
+  scale_y_continuous(limits = c(0, 120), expand = c(0, 0),
+                     breaks = seq(0, 120, 10)) +
+  
+  #upper_half_frisbee_field + lower_half_frisbee_field +
+  
+  labs(title = "Where successful throws are made",
+       subtitle = "Initial throw locations of all completed throws for two Ultimate Frisbee teams",
+       caption = "Data courtesy of Ultimate Frisbee Association & Eberhard, Miller, and Sandholtz (2025).",
+       x = "Distance from the middle of the field in yards (positive = right side)",
+       y = "Distance from backline at team's own end zone in yards") +
+  
+  theme(strip.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.spacing = unit(2, "lines"),
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5, face = "italic"),
+        legend.position = "none")
+```
+
 
 Locations of turnovers by team:
 
@@ -276,7 +321,7 @@ ufa_throws_updated |>
   
   ggplot() +
   
-  full_frisbee_field +
+  upper_half_frisbee_field + lower_half_frisbee_field +
   
   # The main plot to create the heat map
   geom_density_2d_filled(aes(x = thrower_x, y = thrower_y), alpha = 0.8) +
@@ -309,44 +354,54 @@ ufa_throws_updated |>
         legend.position = "none")
 ```
 
-Locations of all successful throws (without a turnover, regardless of attacking phase) by team:
+
+Locations of throws (successful throws in a successful attacking phase) by team:
 
 ```{r}
-successful_throws <- ufa_throws_updated |>
+ufa_throws_updated |>
   
-  filter(turnover == 0 & team_in_possession %in% c("empire", "cannons")) |>
+# Use the data for Empire and Cannons only, filter with the throws on goal
+  filter(attack_outcome == 1, team_in_possession %in% c("empire", "cannons")) |>
   mutate(team_in_possession = ifelse(
     team_in_possession == "empire",
     "New York Empire (2021-24)", "Tampa Bay Cannons (2021-22)"
-    ))
-
-successful_throws
+    )) |>
+  
+  ggplot() +
+  
+  upper_half_frisbee_field + lower_half_frisbee_field +
+  
+  # The main plot to create the heat map
+  geom_density_2d_filled(aes(x = thrower_x, y = thrower_y), alpha = 0.8) +
+  
+  facet_wrap(~ team_in_possession, nrow = 1,
+             axes = "all_y") +
+  # axes = "all_y" to display the y-axis in both plots
+  
+  # Set the heat map's palette
+  scale_fill_brewer(palette = "RdYlGn", direction = -1) +
+  # Note that we want to add "Direction = -1" so that Green represents the area
+  # with the lowest density
+  
+  # Add labels to the plot
+  labs(title = "What are the successful locations?",
+       subtitle = "Locations of successful throws in successful attacking phases for two Ultimate Frisbee teams",
+       caption = "Data courtesy of Ultimate Frisbee Association & Eberhard, Miller, and Sandholtz (2025).",
+       x = "Distance from the middle of the field in yards (positive = right side)",
+       y = "Distance from backline at team's own end zone in yards") +
+  
+  # Get rid of gray background on the top of each facet plot (strip.background)
+  # Remove gridlines from the plots (panel.grid)
+  
+  # https://stackoverflow.com/questions/3681647/ggplot-how-to-increase-spacing-between-faceted-plots
+  theme(strip.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.spacing = unit(2, "lines"),
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5, face = "italic"),
+        legend.position = "none")
 ```
 
-
-```{r}
-# DO NOT RUN UNTIL I HAVE MADE ENOUGH CHANGES #
-
-#successful_throws |>
-  
-  #ggplot() + full_frisbee_field +
-  #geom_density_2d_filled(aes(x = thrower_x, y = thrower_y), alpha = 0.8) +
-  #facet_wrap(~ team_in_possession, nrow = 1, axes = "all_y") +
-  #scale_fill_brewer(palette = "RdYlGn", direction = -1) +
-  
-  #labs(title = "Where successful throws are made",
-       #subtitle = "Initial throw locations of all completed throws for two Ultimate Frisbee teams",
-       #caption = "Data courtesy of Ultimate Frisbee Association & Eberhard, Miller, and Sandholtz (2025).",
-       #x = "Distance from the middle of the field in yards (positive = right side)",
-       #y = "Distance from backline at team's own end zone in yards") +
-  
-  #theme(strip.background = element_blank(),
-        #panel.grid = element_blank(),
-        #panel.spacing = unit(2, "lines"),
-        #plot.title = element_text(hjust = 0.5, face = "bold"),
-        #plot.subtitle = element_text(hjust = 0.5, face = "italic"),
-        #legend.position = "none")
-```
 
 #### Bonus: Motivation for the case study
 
