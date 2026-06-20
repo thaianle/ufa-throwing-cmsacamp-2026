@@ -3,16 +3,27 @@ title: "Team Performance Visualizations & Analysis"
 subtitle: "Carnegie Mellon Sports Analytics Camp (CMSACamp) 2026"
 author: "Julia Biesiada"
 date: "June 19, 2026"
-format: html
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-tools: true
+    theme: cosmo
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
 ---
+
 **In this file, I use the team-level data frame to create visualizations that compare team performance, scoring efficiency, turnovers, and tactical playing style by throwing. Each visualization includes my analysis and interpretation of the main patterns.**
 
-
+```{r}
 # 0. Loading Data
 
-This section loads the CSV file that was created in the previous Quarto file **02_Creating_Team_Level_Data_Frame**. The CSV file needs to be saved in the same folder as this file so R can read it correctly.
+# section loads the CSV file that was created in the previous Quarto file **02_Creating_Team_Level_Data_Frame**. The CSV file needs to be saved in the same folder as this file so R can read it correctly.
 
-```{r}
 library(tidyverse)
 library(ggplot2)
 library(gt)
@@ -21,9 +32,10 @@ library(ggimage)
 full_team_stats <- read.csv("full_team_stats.csv")
 ```
 
-### 0.1 Recreate logo paths
-This section creates a small data frame with each team name and the file path to its logo image. The logos need to be saved in a folder called logos in the same directory as this Quarto file.
 ```{r}
+### 0.1 Recreate logo paths
+#This section creates a small data frame with each team name and the file path to its logo image. The logos need to be saved in a folder called logos in the same directory as this Quarto file.
+
 team_logos <- tibble(
   team = c(
     "alleycats", "aviators",  "breeze",      "cannons",
@@ -38,9 +50,10 @@ team_logos <- tibble(
 )
 ```
 
-### 0.2 Creating a dataframe for the ggplot with a new plot_data
-This section combines the team statistics with the logo paths, so each team has its performance data and logo in one data frame.
 ```{r}
+### 0.2 Creating a dataframe for the ggplot with a new plot_data
+#This section combines the team statistics with the logo paths, so each team has its performance data and logo in one data frame.
+
 plot_data <- full_team_stats |>
   left_join(team_logos, by = "team")
 ```
@@ -88,17 +101,17 @@ This analysis shows the overall trends across teams, but it would help to go dee
 # 2. Team Efficiency Scatter Plot
 This plot compares each team’s goal ratio and turnover ratio. The dashed lines show the league median, which divides teams into four groups: elite, risk-taking, passive, and struggling. This helps identify teams that score efficiently, avoid turnovers, or play with a riskier style.
 
-### 2.1 Creating a Median for a Goal Ratio
-This section calculates the league median goal ratio, which is used as the horizontal reference line in the scatter plot.
-
 ```{r}
+### 2.1 Creating a Median for a Goal Ratio
+#This section calculates the league median goal ratio, which is used as the horizontal reference line in the scatter plot.
+
 med_goal<- median(plot_data$goal_rate, na.rm = TRUE)
 ```
 
-### 2.1.2 Creating a Median for a Turnover Ratio
-This section calculates the league median turnover ratio, which is used as the vertical reference line in the scatter plot.
-
 ```{r}
+#### 2.1.2 Creating a Median for a Turnover Ratio
+#This section calculates the league median turnover ratio, which is used as the vertical reference line in the scatter plot.
+
 med_turnover <- median(plot_data$turnover_rate, na.rm = TRUE)
 ```
 
@@ -142,7 +155,7 @@ ggplot(plot_data, aes(x = turnover_rate, y = goal_rate)) +
            label = "ELITE",      hjust = 0, vjust = 1,
            color = "darkgreen",  fontface = "bold", size = 7) +
   annotate("text",
-           x = max(0.083),
+           x = max(plot_data$turnover_rate),
            y = max(plot_data$goal_rate),
            label = "RISK-TAKING",    hjust = 1, vjust = 1,
            color = "orange",     fontface = "bold", size = 7) +
@@ -152,7 +165,7 @@ ggplot(plot_data, aes(x = turnover_rate, y = goal_rate)) +
            label = "PASSIVE",    hjust = 0, vjust = 0,
            color = "steelblue",  fontface = "bold", size = 7) +
   annotate("text",
-           x = max(0.083),
+           x = max(plot_data$turnover_rate),
            y = min(plot_data$goal_rate),
            label = "STRUGGLING", hjust = 1, vjust = 0,
            color = "firebrick",  fontface = "bold", size = 7) +
@@ -166,10 +179,10 @@ ggplot(plot_data, aes(x = turnover_rate, y = goal_rate)) +
   ) +
   theme_minimal(base_size = 16) +
   theme(
-    plot.title    = element_text(face = "bold", size = 22, hjust = 0.5),  
+    plot.title    = element_text(face = "bold", size = 16, hjust = 0.5),  
     plot.subtitle = element_text(face = "italic", size = 14, color = "gray40",hjust = 0.5),
-    axis.title.x  = element_text(face = "bold", size = 18),
-    axis.title.y  = element_text(face = "bold", size = 18),
+    axis.title.x  = element_text(face = "bold", size = 14),
+    axis.title.y  = element_text(face = "bold", size = 14),
     axis.text.x   = element_text(size = 13),
     axis.text.y   = element_text(size = 13),
     panel.grid    = element_line(color = "gray90"))
