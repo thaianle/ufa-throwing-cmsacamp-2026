@@ -189,15 +189,14 @@ tactics_features <- ufa_clean|>
     avg_throw_angle = round(mean(abs(throw_angle), na.rm = TRUE),3),
     # What rate they attempt long throws?
     long_throw_rate = round(sum(throw_distance >= 35, na.rm = TRUE) / n(),3),
-        # Long Goal Rate 
+    # Long Goal Rate 
     long_goal_rate= round(sum(throw_distance >= 35 & goal == 1,na.rm = TRUE) /
                           sum(throw_distance >= 35, na.rm = TRUE), 3),
     # Short Goal Rate 
-    short_goal_rate= round(sum(throw_distance <= 10 & goal == 1,na.rm = TRUE)/
-                             sum(throw_distance >= 35, na.rm = TRUE),3),
+    short_goal_rate = round(sum(throw_distance <= 10 & goal == 1, na.rm = TRUE)/
+                         sum(throw_distance <= 10, na.rm = TRUE), 3),
     # Medium Goal Rate
-    medium_goal_rate= round(sum(throw_distance > 10 & throw_distance < 35 & goal == 1,
-    na.rm = TRUE) /sum(throw_distance > 10 & throw_distance < 35, na.rm = TRUE), 3), 
+    medium_goal_rate= round(sum(throw_distance > 10 & throw_distance < 35 & goal      == 1,na.rm = TRUE) /sum(throw_distance > 10 & throw_distance < 35, na.rm =        TRUE), 3), 
        
     ## Defensive Features
     # Short throw rate — teams that play it safe

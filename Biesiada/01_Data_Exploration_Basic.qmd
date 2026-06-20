@@ -1,0 +1,177 @@
+---
+title: "01_Data_Exploration_Basic"
+subtitle: "Carnegie Mellon Sports Analytics Camp (CMSACamp) 2026"
+author: "Julia Biesiada"
+date: "June 10, 2026"
+format: html
+---
+
+**Basic Data Exploration of UFA: 2021 to 2024 Seasons**
+
+# 0. Data Loading
+
+This section loads the necessary R library and imports the provided UFA throws dataset.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+ufa_throws <- read_csv("https://raw.githubusercontent.com/36-SURE/2026/main/data/ufa_throws.csv")
+
+```
+
+# 1. Data Structure
+
+```{r}
+dim(ufa_throws) #to check a dimension
+class(ufa_throws) # check a class 
+colnames(ufa_throws)  # check the column names
+head(ufa_throws) #check the head of 6 
+```
+```{r}
+# Check the Summary of the ufa_throws
+summary(ufa_throws)
+```
+Understanding more about the game itself:
+
+- Dimension of the field (based on coordinates): 53.333 yards (x_cordinates) and 120 yards
+- Field is splited into 2 zones at the end (20 yards each)
+- In regular game there is 4 quaters but when the teams are tied, they played 5th quater
+- Game last 48 minutes (12 min each) and in overtime is 5 minutes
+- Possession Numbers represents the sequence of the play until the goal is scored (it can have many turnovers)
+
+```{r}
+ufa_throws|>
+  select(thrower,receiver,possession_num,possession_throw,home_team_score,away_team_score,turnover, goal,times,gameID,away_teamID)|>
+  filter(gameID == "2021-07-10-MIN-IND", away_teamID == "windchill" )|>
+  arrange(desc(possession_num)) # it not depends on the time reamining, it not depends on the specific thrower to the same person
+
+```
+# 2. Team Data
+Team Info:
+
+- There are 26 teams and also 2 allstar teams (only one game in 2022-11-12)
+- Bay cannons only play 2021-2022 (miss 2 seasons)
+- Outlaws only play 2021-2022 (miss 2 seasons)
+- Colorado Summit only play 2022 - 2024 (miss 1 season)
+- Portland Nitro only play 2022 - 2024 (miss 1 season)
+- Salt Lake Shred only play 2022 - 2024 (miss 1 season)
+- Houston Havoc only play 2023 - 2024 (miss 2 seasons)
+
+```{r}
+#all teams
+ufa_teams <- ufa_throws |>
+  filter(home_teamID != "allstars1",
+         away_teamID != "allstars1")|>
+  distinct(away_teamID)|>
+  rename(team = away_teamID) |>
+  arrange(team) |>
+  print(n = 27)
+
+#for the allstars
+ufa_throws |>
+  filter(home_teamID == "allstars2") |>
+  select(gameID, home_teamID, away_teamID, score_diff)
+
+```
+# 3. Schedule Data
+There were 4 seasons:
+
+- for 2021 through 2023 seasons American Ultimate Disc League (AUDL) -> Ultimate Frisbee Association(UFA)
+- there  is 123 games in 2021 -> starting from 06-04 to 09-11
+- there is 155 games in 2022 -> starting from 04-29 to 08-27
+- there is 145 games in 2023 _> starting from 04-28 to 08-26
+- there is 151 games in 2024 -> starting from 04-26 to 08-24
+
+```{r}
+# To check how many games were in 2021
+ufa_throws |>
+  distinct(gameID) |>
+  filter(str_starts(gameID, "2021")) |>
+  nrow()
+```
+
+# 4. Ulitmate Frisbee Field - Visualization
+
+I recreated an ultimate frisbee field to better understand the coordinate system in the dataset. This visualization helps show where throws start and end on the field, making it easier to analyze field position, goals, turnovers, and throwing patterns. The ultimate frisbee field is very similar to an American football field because both are long rectangular fields with two end zones. However, ultimate frisbee uses the end zones for scoring by catching the disc inside it.
+
+```{r}
+# Field Plot
+
+ggplot() +
+  #  Main Field 
+  annotate("rect", xmin = -26.67, xmax = 26.67, ymin = 0, ymax = 80, 
+           fill = "#2d6a35", color = "white", linewidth = 1) +
+  
+  # Top End Zone
+  annotate("rect", xmin = -26.67, xmax = 26.67, ymin = 80, ymax = 100, 
+           fill = "#1a4f25", color = "white", linewidth = 1) +
+  
+  # Bottom End Zone
+  annotate("rect", xmin = -26.67, xmax = 26.67, ymin = -20, ymax = 0, 
+           fill = "#1a4f25", color = "white", linewidth = 1) +
+  
+  # Hash Marks Every 10yds
+  geom_hline(yintercept = seq(0, 80, by = 10),
+             color = "white", linewidth = 0.2, alpha = 0.4) +
+  
+  # Main Yard Lines
+  geom_hline(yintercept = c(20, 40, 60, 80),
+             color = "white", linewidth = 0.6) +
+  
+  # Center Line
+  annotate("segment",
+           x = -26.67, xend = 26.67,
+           y = 40, yend = 40,
+           color = "white", linewidth = 1) +
+  
+  # Vertical Center Line
+  annotate("segment", x = 0, xend = 0, y = 0, yend = 80,
+           color = "white", linewidth = 0.1, alpha = 0.4) +
+  
+  # End Zone Labels
+  annotate("text", x = 0, y = 90,
+           label = "END ZONE",
+           color = "white", fontface = "bold.italic", size = 5) +
+  annotate("text", x = 0, y = -10,
+           label = "END ZONE",
+           color = "white", fontface = "bold.italic", size = 5) +
+  
+  # Sides Text
+  annotate("text",
+           x = c(-13.335, 13.335),
+           y = c(45, 45),
+           label = c("Left Side", "Right Side"),
+           color = "white", fontface = "bold.italic",
+           size = 3, alpha = 0.8) +
+  
+  # YARD Numbers Left
+  annotate("text",
+           x     = rep(-29.5, 5),
+           y     = c(0, 20, 40, 60, 80),
+           label = c("0", "20", "40", "60", "80"),
+           color = "gray20", size = 3.5, fontface = "bold") +
+  
+  # YARD Numbers Right
+  annotate("text",
+           x     = rep(29.5, 5),
+           y     = c(0, 20, 40, 60, 80),
+           label = c("0", "20", "40", "60", "80"),
+           color = "gray20", size = 3.5, fontface = "bold") +
+  
+  # Title and Subtitle
+  labs(
+    title    = "Ultimate Frisbee Field",
+    subtitle = "Width: 53.3 yds | Length: 120 yds (80 + 2×20 end zones)"
+  ) +
+  
+  coord_fixed() +
+  theme_void() +
+  theme(
+    plot.title      = element_text(hjust = 0.5, face = "bold", size = 16,
+                                   margin = margin(b = 4)),
+    plot.subtitle   = element_text(hjust = 0.5, color = "gray40", size = 10,
+                                   margin = margin(b = 10)),
+    plot.margin     = margin(20, 40, 20, 40),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+```

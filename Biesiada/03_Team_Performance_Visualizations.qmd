@@ -1,0 +1,648 @@
+---
+title: "Team Performance Visualizations & Analysis"
+subtitle: "Carnegie Mellon Sports Analytics Camp (CMSACamp) 2026"
+author: "Julia Biesiada"
+date: "June 19, 2026"
+format: html
+---
+**In this file, I use the team-level data frame to create visualizations that compare team performance, scoring efficiency, turnovers, and tactical playing style by throwing. Each visualization includes my analysis and interpretation of the main patterns.**
+
+
+# 0. Loading Data
+
+This section loads the CSV file that was created in the previous Quarto file **02_Creating_Team_Level_Data_Frame**. The CSV file needs to be saved in the same folder as this file so R can read it correctly.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(gt)
+library(ggimage)
+
+full_team_stats <- read.csv("full_team_stats.csv")
+```
+
+### 0.1 Recreate logo paths
+This section creates a small data frame with each team name and the file path to its logo image. The logos need to be saved in a folder called logos in the same directory as this Quarto file.
+```{r}
+team_logos <- tibble(
+  team = c(
+    "alleycats", "aviators",  "breeze",      "cannons",
+    "cascades",  "empire",    "flyers",      "glory",
+    "growlers",  "havoc",     "hustle",      "legion",
+    "mechanix",  "nitro",     "outlaws",     "phoenix",
+    "radicals",  "royal",     "rush",        "shred",
+    "sol",       "spiders",   "summit",      "thunderbirds",
+    "union",     "windchill"
+  ),
+  logo_url = paste0(getwd(), "/logos/", team, ".png")
+)
+```
+
+### 0.2 Creating a dataframe for the ggplot with a new plot_data
+This section combines the team statistics with the logo paths, so each team has its performance data and logo in one data frame.
+```{r}
+plot_data <- full_team_stats |>
+  left_join(team_logos, by = "team")
+```
+
+# 1.1 Goal Differential by Team
+
+This lollipop chart shows each team’s plus/minus, which is goals scored minus goals conceded. Teams above zero scored more goals than they allowed (green), while teams below zero allowed more goals than they scored (red).
+
+```{r}
+plot_data |>
+  ggplot(aes(x = reorder(team, plus_minus), y = plus_minus))+
+  geom_segment(aes(xend = team, y = 0, yend = plus_minus, color = plus_minus > 0),linewidth = 1.5)+
+  geom_image(aes(image = logo_url)) + # logos instead of points
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  scale_color_manual(values = c("TRUE" = "darkgreen", "FALSE" = "salmon")) +
+  scale_y_continuous(breaks = seq(-500, 275, by = 50))+
+  coord_flip()+
+  guides(color = "none") + 
+  labs(
+    title = "Goal Differential (+/-) by Team",
+    subtitle = "2021 - 2024 Season",
+    x = "Team", y = "+/-"
+  ) +
+  theme_minimal()+
+  theme_bw()+
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    plot.subtitle = element_text(face = "italic", size = 10, hjust = 0.5),
+    axis.text.x = element_text(face = "italic", size = 10),
+    axis.text.y = element_text(face = "italic", size = 10),
+    axis.title.x = element_text(face = "bold", size = 12),
+    axis.title.y = element_text(face = "bold", size = 12))
+    
+```
+
+### 1.2 Analysis
+Ten teams finished positive, led by **Empire** (+~270), with **Breeze**, **Flyers**, and **Windchill** close behind in a clear top tier.
+
+The bottom is more extreme than the top: **Mechanix** (~-450) and **Nitro** (~-260) are far worse than any team is good, nearly doubling Empire's margin in the opposite direction.
+
+The middle of the league **(Glory through Cascades)** is tightly bunched near zero. 
+
+This analysis shows the overall trends across teams, but it would help to go deeper into the "why" specifically, what's making Empire and Breeze's strong performance, and what's behind Mechanix and Nitro's struggles.
+
+# 2. Team Efficiency Scatter Plot
+This plot compares each team’s goal ratio and turnover ratio. The dashed lines show the league median, which divides teams into four groups: elite, risk-taking, passive, and struggling. This helps identify teams that score efficiently, avoid turnovers, or play with a riskier style.
+
+### 2.1 Creating a Median for a Goal Ratio
+This section calculates the league median goal ratio, which is used as the horizontal reference line in the scatter plot.
+
+```{r}
+med_goal<- median(plot_data$goal_rate, na.rm = TRUE)
+```
+
+### 2.1.2 Creating a Median for a Turnover Ratio
+This section calculates the league median turnover ratio, which is used as the vertical reference line in the scatter plot.
+
+```{r}
+med_turnover <- median(plot_data$turnover_rate, na.rm = TRUE)
+```
+
+### 2.2 Creating the Scatter Plot
+This section creates the final scatter plot. Each team is shown with its logo, and the median lines divide the plot into four playing-style groups.
+
+```{r}
+ggplot(plot_data, aes(x = turnover_rate, y = goal_rate)) +
+  
+  # Quadrant shading
+  annotate("rect",
+           xmin = -Inf,         xmax = med_turnover,
+           ymin = med_goal,     ymax = Inf,
+           fill = "darkgreen",  alpha = 0.05) +
+  annotate("rect",
+           xmin = med_turnover, xmax = Inf,
+           ymin = med_goal,     ymax = Inf,
+           fill = "orange",     alpha = 0.05) +
+  annotate("rect",
+           xmin = -Inf,         xmax = med_turnover,
+           ymin = -Inf,         ymax = med_goal,
+           fill = "steelblue",  alpha = 0.05) +
+  annotate("rect",
+           xmin = med_turnover, xmax = Inf,
+           ymin = -Inf,         ymax = med_goal,
+           fill = "firebrick",  alpha = 0.05) +
+  
+  #Median lines 
+  geom_vline(xintercept = med_turnover,
+             linetype = "dashed", color = "gray40", linewidth = 0.6) +
+  geom_hline(yintercept = med_goal,
+             linetype = "dashed", color = "gray40", linewidth = 0.6) +
+  
+  # Team logos
+  geom_image(aes(image = logo_url), size = 0.055, asp = 14/9) +
+  
+  # Quadrant labels
+  annotate("text",
+           x = min(plot_data$turnover_rate),
+           y = max(plot_data$goal_rate),
+           label = "ELITE",      hjust = 0, vjust = 1,
+           color = "darkgreen",  fontface = "bold", size = 7) +
+  annotate("text",
+           x = max(0.083),
+           y = max(plot_data$goal_rate),
+           label = "RISK-TAKING",    hjust = 1, vjust = 1,
+           color = "orange",     fontface = "bold", size = 7) +
+  annotate("text",
+           x = min(plot_data$turnover_rate),
+           y = min(plot_data$goal_rate),
+           label = "PASSIVE",    hjust = 0, vjust = 0,
+           color = "steelblue",  fontface = "bold", size = 7) +
+  annotate("text",
+           x = max(0.083),
+           y = min(plot_data$goal_rate),
+           label = "STRUGGLING", hjust = 1, vjust = 0,
+           color = "firebrick",  fontface = "bold", size = 7) +
+  
+  #Labels & theme
+  labs(
+    title    = "How can goal and turnover rates indicate team performance?",
+    subtitle = "Dashed lines = league median",
+    x        = " Turnover Rate",
+    y        = "Goal Rate",
+  ) +
+  theme_minimal(base_size = 16) +
+  theme(
+    plot.title    = element_text(face = "bold", size = 22, hjust = 0.5),  
+    plot.subtitle = element_text(face = "italic", size = 14, color = "gray40",hjust = 0.5),
+    axis.title.x  = element_text(face = "bold", size = 18),
+    axis.title.y  = element_text(face = "bold", size = 18),
+    axis.text.x   = element_text(size = 13),
+    axis.text.y   = element_text(size = 13),
+    panel.grid    = element_line(color = "gray90"))
+
+
+# Saving in ggplot
+# ggsave("scatter_efficiency.png",
+      # width  = 14,
+      # height = 9,
+       #dpi    = 300,
+       #bg     = "white")
+```
+
+### 2.3 Creating a Table
+```{r}
+plot_data |>
+  mutate(
+    quadrant = case_when(
+      goal_rate >= med_goal & turnover_rate <= med_turnover ~ "Elite",
+      goal_rate >= med_goal & turnover_rate >  med_turnover ~ "Risk-Taking",
+      goal_rate <  med_goal & turnover_rate <= med_turnover ~ "Passive",
+      goal_rate <  med_goal & turnover_rate >  med_turnover ~ "Struggling"
+    ), logo = paste0("logos/", team, ".png")
+  ) |>
+  select(logo, team, quadrant, win_pct, goal_rate,
+         turnover_rate, plus_minus) |>
+  arrange(quadrant, desc(win_pct)) |>
+  gt() |>
+  text_transform(
+  locations = cells_body(columns = logo),
+  fn = function(x) {
+    local_image(filename = x, height = px(30))
+  }
+  ) |>
+
+  # Title
+  tab_header(
+    title    = md("**UFA Team Efficiency Table**"),
+    subtitle = md("*Grouped by performance quadrant*")
+  ) |>
+
+  # Column labels 
+  cols_label(
+    logo           = "",
+    team           = "Team",
+    quadrant       = "Quadrant",
+    win_pct        = "Win %",
+    goal_rate     = "Goal Rate",
+    turnover_rate = "Turnover Rate",
+    plus_minus     = "Goal Difference"
+  ) |>
+  
+  cols_hide(columns = quadrant) |>
+
+  #Format numbers 
+  fmt_percent(
+    columns  = c(win_pct, goal_rate, turnover_rate),
+    decimals = 1                                      
+  ) |>
+  fmt_number(
+    columns  = plus_minus,
+    decimals = 0                                       
+  ) |>
+
+  # Quadrant group labels 
+  tab_row_group(label = "Struggling", rows = quadrant == "Struggling") |>
+  tab_row_group(label = "Risk-Taking", rows = quadrant == "Risk-Taking") |>
+  tab_row_group(label = "Passive",   rows = quadrant == "Passive") |>
+  tab_row_group(label = "Elite",       rows = quadrant == "Elite") |>
+  
+  # Clean row colors per group 
+  tab_style(
+    style     = list(
+      cell_fill(color = "#eafaf1"),                   
+      cell_text(color = "gray20")
+    ),
+    locations = cells_body(rows = quadrant == "Elite")
+  ) |>
+  tab_style(
+    style     = list(
+      cell_fill(color = "#fef9e7"),                   
+      cell_text(color = "gray20")
+    ),
+    locations = cells_body(rows = quadrant == "Risk-Taking")
+  ) |>
+  tab_style(
+    style     = list(
+      cell_fill(color = "#eaf4fb"),                  
+      cell_text(color = "gray20")
+    ),
+    locations = cells_body(rows = quadrant == "Passive")
+  ) |>
+  tab_style(
+    style     = list(
+      cell_fill(color = "#fdedec"),                 
+      cell_text(color = "gray20")
+    ),
+    locations = cells_body(rows = quadrant == "Struggling")
+  ) |>
+
+  # Bold team names 
+  tab_style(
+    style     = cell_text(weight = "bold", size = "medium"),
+    locations = cells_body(columns = team)
+  ) |>
+
+# goal_rate — higher = better 
+  data_color(
+    columns = goal_rate,
+    palette = c("#e74c3c", "#f9e79f", "#27ae60"),
+    alpha   = 0.7,
+    autocolor_text = FALSE
+  ) |>
+
+# turnover_rate — LOWER = better 
+  data_color(
+    columns = turnover_rate,
+    palette = c("#27ae60", "#f9e79f", "#e74c3c"),   
+    alpha   = 0.7,
+    autocolor_text = FALSE
+  ) |>
+
+# win_pct
+  data_color(
+    columns = win_pct,
+    palette = c("#e74c3c", "#f9e79f", "#27ae60"),
+    alpha   = 0.8,
+    autocolor_text = FALSE
+  ) |>
+
+# plus_minus centered on 0 
+  data_color(
+    columns = plus_minus,
+    palette = c("#e74c3c", "white", "#27ae60"),
+    domain  = c(
+    -max(abs(plot_data$plus_minus)),
+     max(abs(plot_data$plus_minus))
+    ),
+    autocolor_text = FALSE
+  )|>
+
+# Group header styling
+  tab_style(
+    style     = list(
+      cell_fill(color = "gray20"),
+      cell_text(color = "white", weight = "bold",align = "center")
+    ),
+    locations = cells_row_groups()
+  ) |>
+
+# Column header styling
+  tab_style(
+    style = list(
+      cell_fill(color = "gray95"),
+      cell_text(weight = "bold", align = "center")),
+    locations = cells_column_labels()) |>
+  
+  cols_width(
+    logo           ~ px(45),
+    team           ~ px(150),
+    win_pct        ~ px(80),
+    goal_rate     ~ px(100),
+    turnover_rate ~ px(130),
+    plus_minus     ~ px(130)
+  ) |>
+  
+  cols_align(
+    align = "center",
+    columns = everything()
+  )|>
+
+  tab_options(
+    table.font.size                   = 14,
+    heading.title.font.size           = 18,
+    heading.subtitle.font.size        = 12,
+    data_row.padding                  = px(5),
+    table.border.top.color            = "gray30",
+    column_labels.border.bottom.color = "gray30",
+    row.striping.include_table_body   = FALSE,
+    table.width                       = px(700)
+  )
+
+# Saving a table just use table_save <- plot_data 
+# gtsave(table_save, "table_efficiency.png", zoom = 3)
+```
+### 2.4 Analysis
+By looking at **goal rate** and **turnover rate** metrics, we can better understand the current performance of UFA teams. **Goal rate** shows how efficiently a team scores, while **turnover rate** shows how often a team loses possession.
+
+In the scatterplot, I used the **league median** for both metrics to split teams into four groups: **elite**, **risk taking**, **passive**, and **struggling**. Each group represents a different team style.
+
+The table supports the scatterplot by showing the exact numbers for each team, including **win percentage** and **goal differential**. This helps connect each team style to actual performance outcomes.
+
+**Elite teams** have the best balance because they score at a high rate and limit turnovers. These teams also tend to have **higher win percentages** and **positive goal differentials**. **Struggling teams** show the opposite pattern: they score less often and turn the disc over more.
+
+The most interesting comparison is between **passive** and **risk taking** teams. **Passive teams** score less, but they also make fewer turnovers. **Risk taking teams** score more, but they also lose the disc more often. For example, the **Outlaws** have a higher goal rate than the **Breeze**, but their turnover rate is almost twice as high. Because of that, their scoring does not translate into a higher win percentage.
+
+To sum up, based on these numbers, **scoring more is important**, but it does not always lead to more wins. I cannot say that turnovers are the only reason for team success, but **limiting turnovers seems to play a very important role**.
+
+The main takeaway is that successful teams need **balance**. **Scoring matters**, but **making fewer mistakes can make a big difference**.
+
+# 3.Throw Type by Team
+
+This stacked bar chart shows each team’s throwing profile based on short, medium, and long throws. **I used my own thresholds for this analysis: short throws are 10 yards or less, medium throws are 11 to 34 yards, and long throws are 35 yards or more.** This helps compare team's throw patterns. These categories help compare team throwing patterns and show whether teams rely more on safer short throws or more aggressive long throws.
+
+I divided this analysis into three visualizations:
+
+**a. General Throw Rate**
+Shows the overall distribution of short, medium, and long throws for each team.
+```{r}
+# Picking the top 3 teams and 3 worst teams
+top_and_bottom_teams <- full_team_stats |>
+  slice_max(win_pct, n = 3) |>
+  mutate(group = "Top 3") |>
+  bind_rows(
+    full_team_stats |>
+      slice_min(win_pct, n = 3) |>
+      mutate(group = "Bottom 3")
+  ) |>
+  arrange(desc(win_pct)) |>
+  mutate(
+    logo_path = paste0("logos/", team, ".png"),
+    group = factor(group, levels = c("Top 3", "Bottom 3")),
+    team = factor(team, levels = rev(team))
+  )
+```
+
+```{r}
+# Adding a logo data to this teams
+logo_data <- top_and_bottom_teams |>
+  distinct(team, group, win_pct, logo_path)
+```
+
+```{r}
+# Creating a plot
+top_and_bottom_teams |>
+  select(team, group, win_pct, logo_path, short_throw_rate, medium_throw_rate, long_throw_rate) |>
+  pivot_longer(
+    cols = c(short_throw_rate, medium_throw_rate, long_throw_rate),
+    names_to = "throw_type",
+    values_to = "rate"
+  ) |>
+  mutate(
+    throw_type = recode(
+      throw_type,
+      "short_throw_rate"  = "Short Throws\n≤ 10 yards",
+      "medium_throw_rate" = "Medium Throws\n10–35 yards",
+      "long_throw_rate"   = "Long Throws\n≥ 35 yards"
+    )
+  ) |>
+  ggplot(aes(
+    x = team,
+    y = rate,
+    fill = throw_type
+  )) +
+  geom_col(position = "dodge") +
+  
+  geom_image(
+    data = logo_data,
+    aes(
+      x = team,
+      y = -0.04,
+      image = logo_path
+    ),
+    inherit.aes = FALSE,
+    size = 0.12
+  ) +
+  
+  geom_text(
+    aes(label = scales::percent(rate, accuracy = 1)),
+    position = position_dodge(width = 0.9),
+    hjust = -1,
+    size = 2.5,
+    fontface = "bold"
+  ) +
+  
+  scale_y_continuous(
+    labels = function(x) ifelse(x < 0, "", scales::percent(x)),
+    limits = c(-0.08, 0.90),
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  coord_flip(clip = "off") +
+  
+  facet_grid(group ~ ., scales = "free_y", space = "free_y") +
+  
+  labs(
+    title    = "Throw Profile by Team",
+    subtitle = "Distribution of short, medium and long throws",
+    x        = "Team",
+    y        = "Goal Rate",
+    fill     = "Throw Distance"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 16, hjust = 0.5),
+    axis.text.x   = element_text(size = 10),
+    axis.text.y   = element_text(size = 10),
+    axis.title.x  = element_text(face = "bold", size = 12),
+    axis.title.y  = element_text(face = "bold", size = 12),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold", hjust = 0.4),
+    strip.text.y = element_text(face = "bold", size = 11),
+    strip.background = element_rect(fill = "gray90", color = "gray70")
+  )
+
+```
+
+**b. Throw Rate by Goal**
+Shows what types of throws most often resulted in goals for each team.
+
+```{r}
+# Creating a plot
+top_and_bottom_teams |>
+  select(team, group, win_pct, logo_path, short_goal_rate, medium_goal_rate, long_goal_rate) |>
+  pivot_longer(
+    cols = c(short_goal_rate, medium_goal_rate, long_goal_rate),
+    names_to = "throw_type",
+    values_to = "rate"
+  ) |>
+  mutate(
+    throw_type = recode(
+      throw_type,
+      "short_goal_rate"  = "Short Throws\n≤ 10 yards",
+      "medium_goal_rate" = "Medium Throws\n10–35 yards",
+      "long_goal_rate"   = "Long Throws\n≥ 35 yards"
+    )
+  ) |>
+  ggplot(aes(
+    x = team,
+    y = rate,
+    fill = throw_type
+  )) +
+  geom_col(position = "dodge") +
+  
+  geom_image(
+    data = logo_data,
+    aes(
+      x = team,
+      y = -0.04,
+      image = logo_path
+    ),
+    inherit.aes = FALSE,
+    size = 0.12
+  ) +
+  
+  geom_text(
+    aes(label = scales::percent(rate, accuracy = 1)),
+    position = position_dodge(width = 0.9),
+    hjust = -1,
+    size = 2.5,
+    fontface = "bold"
+  ) +
+  
+  scale_y_continuous(
+    labels = function(x) ifelse(x < 0, "", scales::percent(x)),
+    limits = c(-0.08, 0.70),
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  coord_flip(clip = "off") +
+  
+  facet_grid(group ~ ., scales = "free_y", space = "free_y") +
+  
+  labs(
+    title    = "Which Throw Types Lead to Goals?",
+    subtitle = "Distribution of short, medium and long throws",
+    x        = "Team",
+    y        = "% of Throws",
+    fill     = "Throw Distance"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 16, hjust = 0.5),
+    axis.text.x   = element_text(size = 10),
+    axis.text.y   = element_text(size = 10),
+    axis.title.x  = element_text(face = "bold", size = 12),
+    axis.title.y  = element_text(face = "bold", size = 12),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold", hjust = 0.4),
+    strip.text.y = element_text(face = "bold", size = 11),
+    strip.background = element_rect(fill = "gray90", color = "gray70")
+  )
+
+```
+
+
+**c. Throw Rate by Turnover**
+Shows what types of throws were most connected with turnovers for each team.
+
+```{r}
+# Creating a plot
+top_and_bottom_teams |>
+  select(team, group, win_pct, logo_path, short_throw_turnover_rate, medium_throw_turnover_rate, long_throw_turnover_rate) |>
+  pivot_longer(
+    cols = c(short_throw_turnover_rate, medium_throw_turnover_rate, long_throw_turnover_rate),
+    names_to = "throw_type",
+    values_to = "rate"
+  ) |>
+  mutate(
+    throw_type = recode(
+      throw_type,
+      "short_throw_turnover_rate"  = "Short Throws\n≤ 10 yards",
+      "medium_throw_turnover_rate" = "Medium Throws\n10–35 yards",
+      "long_throw_turnover_rate"   = "Long Throws\n≥ 35 yards"
+    )
+  ) |>
+  ggplot(aes(
+    x = team,
+    y = rate,
+    fill = throw_type
+  )) +
+  geom_col(position = "dodge") +
+  
+  geom_image(
+    data = logo_data,
+    aes(
+      x = team,
+      y = -0.04,
+      image = logo_path
+    ),
+    inherit.aes = FALSE,
+    size = 0.12
+  ) +
+  
+  geom_text(
+    aes(label = scales::percent(rate, accuracy = 1)),
+    position = position_dodge(width = 0.9),
+    hjust = -1,
+    size = 2.5,
+    fontface = "bold"
+  ) +
+  
+  scale_y_continuous(
+    labels = function(x) ifelse(x < 0, "", scales::percent(x)),
+    limits = c(-0.08, 0.70),
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  coord_flip(clip = "off") +
+  
+  facet_grid(group ~ ., scales = "free_y", space = "free_y") +
+  
+  labs(
+    title    = "Which Throw Types Lead to Turnovers?",
+    subtitle = "Distribution of short, medium and long throws",
+    x        = "Team",
+    y        = "Turnover Rate",
+    fill     = "Throw Distance"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 16, hjust = 0.5),
+    axis.text.x   = element_text(size = 10),
+    axis.text.y   = element_text(size = 10),
+    axis.title.x  = element_text(face = "bold", size = 12),
+    axis.title.y  = element_text(face = "bold", size = 12),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold", hjust = 0.4),
+    strip.text.y = element_text(face = "bold", size = 11),
+    strip.background = element_rect(fill = "gray90", color = "gray70")
+  )
+```
+### 3.1 Analysis
+
+We looked at three things for each throw type (**short, medium, long**): how often it's used, how often it leads to a goal, and how often it leads to a turnover.
+Each rate is calculated within a single throw type, not across all throws combined:
+
+**rate** = **(throws of that distance with that outcome)** ÷ **(all throws of that distance)**
+
+**Why goal rate + turnover rate doesn't add up to 100%:** most throws are just passes completions, so not every throw is a direct scoring attempt or a mistake. 
+So for any throw type, only the throws that scored or turned over show up in those rates, everything else was just a normal completed pass and isn't counted at all.
+
+**Chart 1: Throw Distribution**
+Both groups rely heavily on medium throws (65-80% of all throws) and use long throws (5-8% each). Top and bottom teams look almost identical here - there's no clear sign that winning teams play more conservatively or take more risks than losing teams.
+
+**Chart 2: Goal Rate & Chart 3: Turnover Rate**
+Long throws, often called hucks in ultimate, are by far the most likely to result in a goal for every team, scoring 28 to 44% of the time, compared to just 1 to 8% for short and medium throws. This makes sense given what a huck actually is: a direct, downfield attempt at the end zone, rather than a progression pass used to move the disc higher.
+
+We also need to keep in mind that hucks carry the highest turnover rate. Top teams lose the ball on hucks 31 to 36% of the time, and bottom teams lose it 38 to 42% of the time. This makes sense alongside the goal rate numbers: the same distance that makes a huck likely to score also makes it harder to throw accurately and more exposed to wind and defense. The high goal rate and high turnover rate come from the same cause, the throw is simply harder to pull off.
